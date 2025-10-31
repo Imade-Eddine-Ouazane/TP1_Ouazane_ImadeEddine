@@ -1,19 +1,19 @@
 package ma.emsi.ouazane.tp1ouazane.jsf;
-
-
 import jakarta.faces.application.FacesMessage;
 import jakarta.faces.context.FacesContext;
 import jakarta.faces.model.SelectItem;
 import jakarta.faces.view.ViewScoped;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import ma.emsi.ouazane.tp1ouazane.llm.LlmInteraction;
-import ma.emsi.ouazane.tp1ouazane.llm.JSonUtilPourGemini;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
+import java.util.stream.Collectors;
+import ma.emsi.ouazane.tp1ouazane.llm.JSonUtilPourGemini;
+import ma.emsi.ouazane.tp1ouazane.llm.LlmInteraction;
+import ma.emsi.ouazane.tp1ouazane.llm.RequeteException;
 
 /**
  * Backing bean pour la page JSF index.xhtml.
@@ -55,48 +55,35 @@ public class Bb implements Serializable {
      */
     private StringBuilder conversation = new StringBuilder();
 
-    /**
-     * Contexte JSF. Utilisé pour qu'un message d'erreur s'affiche dans le formulaire.
-     */
-    @Inject
-    private FacesContext facesContext;
-
-
     private String texteRequeteJson;
-
     private String texteReponseJson;
-
-    private boolean debug;
 
     @Inject
     private JSonUtilPourGemini jsonUtil;
 
 
-    public String getTexteRequeteJson() {
-        return texteRequeteJson;
-    }
 
-    public void setTexteRequeteJson(String texteRequeteJson) {
-        this.texteRequeteJson = texteRequeteJson;
-    }
-
-    public String getTexteReponseJson() {
-        return texteReponseJson;
-    }
-
-    public void setTexteReponseJson(String texteReponseJson) {
-        this.texteReponseJson = texteReponseJson;
-    }
+    private boolean debug = false;
 
     public boolean isDebug() {
+
         return debug;
     }
+    public void toggleDebug() {
 
+
+
+        this.setDebug(!isDebug());
+    }
     public void setDebug(boolean debug) {
         this.debug = debug;
     }
 
-
+    /**
+     * Contexte JSF. Utilisé pour qu'un message d'erreur s'affiche dans le formulaire.
+     */
+    @Inject
+    private FacesContext facesContext;
 
     /**
      * Obligatoire pour un bean CDI (classe gérée par CDI), s'il y a un autre constructeur.
@@ -145,11 +132,7 @@ public class Bb implements Serializable {
         this.conversation = new StringBuilder(conversation);
     }
 
-    public void toggleDebug() {
-        this.setDebug(!isDebug());
-    }
-
-    /**
+    /*
      * Envoie la question au serveur.
      * En attendant de l'envoyer à un LLM, le serveur fait un traitement quelconque, juste pour tester :
      * Le traitement consiste à copier la question en minuscules et à l'entourer avec "||". Le rôle système
@@ -159,39 +142,36 @@ public class Bb implements Serializable {
      */
     public String envoyer() {
         if (question == null || question.isBlank()) {
-            // Erreur ! Le formulaire va être réaffiché en réponse à la requête POST, avec un message d'erreur.
             FacesMessage message = new FacesMessage(FacesMessage.SEVERITY_ERROR,
                     "Texte question vide", "Il manque le texte de la question");
             facesContext.addMessage(null, message);
             return null;
         }
-        // Entourer la réponse avec "||".
-        this.reponse = "||";
-        // Si la conversation n'a pas encore commencé, ajouter le rôle système au début de la réponse
-        if (this.conversation.isEmpty()) {
-            // Ajouter le rôle système au début de la réponse
-            this.reponse += roleSysteme.toUpperCase(Locale.FRENCH) + "\n";
-            // Invalide le bouton pour changer le rôle système
-            this.roleSystemeChangeable = false;
-        }
-        this.reponse += question.toLowerCase(Locale.FRENCH) + "||";
+
+        jsonUtil.setSystemRole(roleSysteme);
 
         try {
             LlmInteraction interaction = jsonUtil.envoyerRequete(question);
             this.reponse = interaction.reponseExtraite();
             this.texteRequeteJson = interaction.questionJson();
             this.texteReponseJson = interaction.reponseJson();
-        } catch (Exception e) {
+        } catch (RequeteException e) {
             FacesMessage message =
                     new FacesMessage(FacesMessage.SEVERITY_ERROR,
                             "Problème de connexion avec l'API du LLM",
-                            "Problème de connexion avec l'API du LLM: " + e.getMessage());
+                            "Problème de connexion avec l'API du LLM" + e.getMessage());
             facesContext.addMessage(null, message);
-            return null; // Rester sur la même page et afficher le message d'erreur.
         }
-        // La conversation contient l'historique des questions-réponses depuis le début.
+
+        // Mise à jour de la conversation
         afficherConversation();
-        return null;
+
+        // Une fois qu’on a envoyé la question, on bloque le rôle système si c’est le premier message
+        if (this.conversation.toString().split("== User:").length <= 2) { // Correction de la condition
+            this.roleSystemeChangeable = false;
+        }
+
+        return null; // reste sur la même page
     }
 
     /**
@@ -240,8 +220,18 @@ public class Bb implements Serializable {
                     are you tell them the average price of a meal.
                     """;
             this.listeRolesSysteme.add(new SelectItem(role, "Guide touristique"));
+
         }
 
         return this.listeRolesSysteme;
     }
+
+    public String getTexteRequeteJson() {
+        return texteRequeteJson;
+    }
+
+    public String getTexteReponseJson() {
+        return texteReponseJson;
+    }
+
 }

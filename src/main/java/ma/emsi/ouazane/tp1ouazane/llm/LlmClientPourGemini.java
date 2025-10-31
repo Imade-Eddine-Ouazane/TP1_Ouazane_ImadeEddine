@@ -1,7 +1,5 @@
 package ma.emsi.ouazane.tp1ouazane.llm;
 
-
-
 import jakarta.enterprise.context.Dependent;
 import jakarta.ws.rs.client.*;
 import jakarta.ws.rs.core.MediaType;
