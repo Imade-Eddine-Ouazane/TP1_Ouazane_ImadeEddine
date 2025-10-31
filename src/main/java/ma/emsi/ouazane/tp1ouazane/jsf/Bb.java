@@ -7,6 +7,8 @@ import jakarta.faces.model.SelectItem;
 import jakarta.faces.view.ViewScoped;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+import ma.emsi.ouazane.tp1ouazane.llm.LlmInteraction;
+import ma.emsi.ouazane.tp1ouazane.llm.JSonUtilPourGemini;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -65,6 +67,9 @@ public class Bb implements Serializable {
     private String texteReponseJson;
 
     private boolean debug;
+
+    @Inject
+    private JSonUtilPourGemini jsonUtil;
 
 
     public String getTexteRequeteJson() {
@@ -170,6 +175,20 @@ public class Bb implements Serializable {
             this.roleSystemeChangeable = false;
         }
         this.reponse += question.toLowerCase(Locale.FRENCH) + "||";
+
+        try {
+            LlmInteraction interaction = jsonUtil.envoyerRequete(question);
+            this.reponse = interaction.reponseExtraite();
+            this.texteRequeteJson = interaction.questionJson();
+            this.texteReponseJson = interaction.reponseJson();
+        } catch (Exception e) {
+            FacesMessage message =
+                    new FacesMessage(FacesMessage.SEVERITY_ERROR,
+                            "Problème de connexion avec l'API du LLM",
+                            "Problème de connexion avec l'API du LLM: " + e.getMessage());
+            facesContext.addMessage(null, message);
+            return null; // Rester sur la même page et afficher le message d'erreur.
+        }
         // La conversation contient l'historique des questions-réponses depuis le début.
         afficherConversation();
         return null;
